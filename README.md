@@ -1,5 +1,5 @@
 # Neural Network Model
-Overview
+# Overview
 This is a simple feedforward neural network implemented using NumPy to solve the XOR problem. The network consists of:
 
 A configurable number of hidden layers
