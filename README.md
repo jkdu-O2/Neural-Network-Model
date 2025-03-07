@@ -1,4 +1,3 @@
-# Neural Network Model
 # Overview
 This is a simple feedforward neural network implemented using NumPy to solve the XOR problem. The network consists of:
 
