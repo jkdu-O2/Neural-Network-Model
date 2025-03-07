@@ -1,1 +1,1 @@
-# Neural-Network-Model
+# Neural Network Model
