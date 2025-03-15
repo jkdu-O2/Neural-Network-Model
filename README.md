@@ -9,3 +9,5 @@ This repository contains a simple feedforward neural network implemented using N
 - Gradient descent optimization  
 
 This project is ideal for learning the basics of neural networks and how they can be applied to solve simple logical problems like XOR.
+
+##
