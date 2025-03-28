@@ -23,3 +23,22 @@ This repository implements a lightweight, NumPy-based feedforward neural network
 git clone https://github.com/jkdu-O2/Neural-Network-Model.git
 cd Neural-Network-Model
 pip install numpy matplotlib
+```
+## Basic Training
+```bash
+from model import NeuralNetwork
+import numpy as np
+
+# Initialize network
+nn = NeuralNetwork(input_size=2, hidden_size=4, output_size=1)
+
+# XOR dataset
+X = np.array([[0,0], [0,1], [1,0], [1,1]])
+y = np.array([[0], [1], [1], [0]])
+
+# Train the model
+nn.train(X, y, epochs=10000, learning_rate=0.1)
+
+# Make predictions
+print(nn.predict([[0,1]]))  # Expected output: ~0.98
+```
