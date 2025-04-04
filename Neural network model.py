@@ -1,19 +1,25 @@
-from matplotlib import pyplot as plt, gridspec
-from matplotlib.widgets import Slider, Button
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+from matplotlib.widgets import Slider, Button
+import time
 
-# Neural network class with console logging
+# Neural Network
 class NeuralNetwork:
     def __init__(self, input_size, hidden_sizes, output_size):
         self.input_size = input_size
         self.hidden_sizes = hidden_sizes
         self.output_size = output_size
-        sizes = [input_size] + hidden_sizes + [output_size]
+        self.reset()
+
+    def reset(self):
+        sizes = [self.input_size] + self.hidden_sizes + [self.output_size]
         rng = np.random.default_rng()
         self.weights = [rng.standard_normal((sizes[i], sizes[i + 1])) for i in range(len(sizes) - 1)]
         self.biases = [rng.standard_normal((1, size)) for size in sizes[1:]]
         self.loss_history = []
         self.accuracy_history = []
+        self.training_time = []
 
     def sigmaMoment(self, x, derivative=False):
         return x * (1 - x) if derivative else 1 / (1 + np.exp(-x))
@@ -46,18 +52,25 @@ class NeuralNetwork:
     def train(self, inputs, targets, epochs, learning_rate):
         self.loss_history = []
         self.accuracy_history = []
-        for epoch in range(epochs + 1):  # ensure it reaches exactly 10000
+        self.training_time = []
+
+        for epoch in range(epochs + 1):
+            t0 = time.time()
             layer_outputs = self.forwardPropagation(inputs)
             self.backwardPropagation(inputs, targets, layer_outputs, learning_rate)
             output = layer_outputs[-1]
             loss = np.mean((targets - output) ** 2)
             accuracy = self.compute_accuracy(output, targets)
+            t1 = time.time()
+
             self.loss_history.append(loss)
             self.accuracy_history.append(accuracy)
+            self.training_time.append(t1 - t0)
+
             if epoch % 100 == 0:
                 print(f"Epoch {epoch}: Loss = {loss:.4f}, Accuracy = {accuracy:.4f}")
 
-# GUI wrapper
+# GUI layer
 class InteractiveNNGUI:
     def __init__(self):
         self.X = np.array([[0, 0], [0, 1], [1, 0], [1, 1]])
@@ -67,40 +80,52 @@ class InteractiveNNGUI:
         self.output_size = 1
         self.learning_rate = 0.1
         self.epochs = 1000
-        self.nn = None  # Delay creation
+        self.nn = NeuralNetwork(self.input_size, self.hidden_sizes, self.output_size)
         self.build_gui()
 
     def build_gui(self):
         plt.ion()
-        self.fig = plt.figure(figsize=(10, 8))
-        gs = gridspec.GridSpec(3, 2, height_ratios=[4, 1, 1])
+        self.fig = plt.figure(figsize=(11, 9))
+        gs = gridspec.GridSpec(4, 2, height_ratios=[4, 0.5, 0.5, 1])
+
         self.ax_loss = self.fig.add_subplot(gs[0, 0])
         self.ax_boundary = self.fig.add_subplot(gs[0, 1])
         self.ax_lr_slider = self.fig.add_subplot(gs[1, :])
         self.ax_epoch_slider = self.fig.add_subplot(gs[2, :])
-        self.ax_button = plt.axes([0.45, 0.01, 0.1, 0.05])
+        self.ax_time_complexity = self.fig.add_subplot(gs[3, :])
+        self.ax_button = plt.axes([0.45, 0.01, 0.1, 0.05], facecolor='#d4af37')
+
+        self.button = Button(self.ax_button, 'Train', color='#f5deb3', hovercolor='#c4a000')
+        self.button.label.set_fontsize(10)
+        self.button.label.set_color('#2b2b2b')
 
         self.slider_lr = Slider(self.ax_lr_slider, 'Learning Rate', 0.01, 1.0, valinit=self.learning_rate, valstep=0.01)
         self.slider_epochs = Slider(self.ax_epoch_slider, 'Epochs', 100, 10000, valinit=self.epochs, valstep=100)
-        self.button = Button(self.ax_button, 'Train')
 
         self.slider_lr.on_changed(self.update_params)
         self.slider_epochs.on_changed(self.update_params)
         self.button.on_clicked(self.train_and_plot)
+
+        # Set initial titles so they're not empty
+        self.ax_loss.set_title("Loss & Accuracy")
+        self.ax_boundary.set_title("Decision Boundary")
+        self.ax_time_complexity.set_title("Training Time Complexity")
 
     def update_params(self, val):
         self.learning_rate = self.slider_lr.val
         self.epochs = int(self.slider_epochs.val)
 
     def train_and_plot(self, event):
-        self.nn = NeuralNetwork(self.input_size, self.hidden_sizes, self.output_size)
+        self.nn.reset()
         self.nn.train(self.X, self.Y, self.epochs, self.learning_rate)
         self.plot_loss_accuracy()
         self.plot_decision_boundary()
+        self.plot_time_complexity()
         self.fig.canvas.draw_idle()
+        time.sleep(0.05)  
 
     def plot_loss_accuracy(self):
-        self.ax_loss.clear()
+        self.ax_loss.cla()
         self.ax_loss.plot(self.nn.loss_history, label='Loss')
         self.ax_loss.plot(self.nn.accuracy_history, label='Accuracy')
         self.ax_loss.set_title("Loss & Accuracy")
@@ -110,13 +135,14 @@ class InteractiveNNGUI:
         self.ax_loss.legend()
 
     def plot_decision_boundary(self):
-        self.ax_boundary.clear()
+        self.ax_boundary.cla()
         x_min, x_max = self.X[:, 0].min() - 0.5, self.X[:, 0].max() + 0.5
         y_min, y_max = self.X[:, 1].min() - 0.5, self.X[:, 1].max() + 0.5
         xx, yy = np.meshgrid(np.linspace(x_min, x_max, 300), np.linspace(y_min, y_max, 300))
         input_grid = np.c_[xx.ravel(), yy.ravel()]
         predictions = self.nn.predict(input_grid)
         Z = predictions.reshape(xx.shape)
+
         self.ax_boundary.contourf(xx, yy, Z, levels=50, cmap="RdBu", alpha=0.8)
         self.ax_boundary.scatter(self.X[:, 0], self.X[:, 1], c=self.Y.ravel(), edgecolors='k', cmap="RdBu", s=100)
         self.ax_boundary.set_title("Decision Boundary")
@@ -124,7 +150,17 @@ class InteractiveNNGUI:
         self.ax_boundary.set_ylabel("Input 2")
         self.ax_boundary.grid(True)
 
-# Entry point
+    def plot_time_complexity(self):
+        self.ax_time_complexity.cla()
+        total_time = np.cumsum(self.nn.training_time)
+        self.ax_time_complexity.plot(total_time, label='Cumulative Time')
+        self.ax_time_complexity.set_title("Training Time Complexity")
+        self.ax_time_complexity.set_xlabel("Epoch")
+        self.ax_time_complexity.set_ylabel("Time (s)")
+        self.ax_time_complexity.grid(True)
+        self.ax_time_complexity.legend()
+
+# Entry Point
 def main():
     InteractiveNNGUI()
     plt.show(block=True)
