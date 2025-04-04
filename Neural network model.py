@@ -6,9 +6,10 @@ import time
 
 # === Neural Network ===
 class NeuralNetwork:
-    def __init__(self, input_size, hidden_sizes, output_size):
+    def __init__(self, input_size, hidden_sizes, output_size, activation_type="sigmoid"):
         self.input_size = input_size
         self.output_size = output_size
+        self.activation_type = activation_type
         self.set_hidden_layers(hidden_sizes)
 
     def set_hidden_layers(self, hidden_sizes):
@@ -24,13 +25,16 @@ class NeuralNetwork:
     def reset(self):
         self.set_hidden_layers(self.hidden_sizes)
 
-    def sigmaMoment(self, x, derivative=False):
-        return x * (1 - x) if derivative else 1 / (1 + np.exp(-x))
+    def activation_function(self, x, derivative=False):
+        if self.activation_type == "sigmoid":
+            return 1 / (1 + np.exp(-x)) if not derivative else x * (1 - x)
+        elif self.activation_type == "relu":
+            return np.maximum(0, x) if not derivative else (x > 0).astype(float)
 
     def forwardPropagation(self, inputs):
         layer_outputs = [inputs]
         for weight, bias in zip(self.weights, self.biases):
-            inputs = self.sigmaMoment(np.dot(inputs, weight) + bias)
+            inputs = self.activation_function(np.dot(inputs, weight) + bias)
             layer_outputs.append(inputs)
         return layer_outputs
 
@@ -40,13 +44,13 @@ class NeuralNetwork:
     def backwardPropagation(self, inputs, targets, layer_outputs, learning_rate):
         output = layer_outputs[-1]
         errors = targets - output
-        delta = errors * self.sigmaMoment(output, derivative=True)
+        delta = errors * self.activation_function(output, derivative=True)
         for i in range(len(self.weights) - 1, -1, -1):
             inputs_T = layer_outputs[i].T if i > 0 else inputs.T
             self.weights[i] += learning_rate * inputs_T.dot(delta)
             self.biases[i] += learning_rate * np.sum(delta, axis=0, keepdims=True)
             if i > 0:
-                delta = delta.dot(self.weights[i].T) * self.sigmaMoment(layer_outputs[i], derivative=True)
+                delta = delta.dot(self.weights[i].T) * self.activation_function(layer_outputs[i], derivative=True)
 
     def compute_accuracy(self, predictions, targets):
         predicted_classes = (predictions > 0.5).astype(int)
