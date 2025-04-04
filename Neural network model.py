@@ -1,18 +1,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from matplotlib.widgets import Slider, Button
+from matplotlib.widgets import Slider, Button, TextBox
 import time
 
-# Neural Network
+# === Neural Network ===
 class NeuralNetwork:
     def __init__(self, input_size, hidden_sizes, output_size):
         self.input_size = input_size
-        self.hidden_sizes = hidden_sizes
         self.output_size = output_size
-        self.reset()
+        self.set_hidden_layers(hidden_sizes)
 
-    def reset(self):
+    def set_hidden_layers(self, hidden_sizes):
+        self.hidden_sizes = hidden_sizes
         sizes = [self.input_size] + self.hidden_sizes + [self.output_size]
         rng = np.random.default_rng()
         self.weights = [rng.standard_normal((sizes[i], sizes[i + 1])) for i in range(len(sizes) - 1)]
@@ -20,6 +20,9 @@ class NeuralNetwork:
         self.loss_history = []
         self.accuracy_history = []
         self.training_time = []
+
+    def reset(self):
+        self.set_hidden_layers(self.hidden_sizes)
 
     def sigmaMoment(self, x, derivative=False):
         return x * (1 - x) if derivative else 1 / (1 + np.exp(-x))
@@ -62,7 +65,6 @@ class NeuralNetwork:
             loss = np.mean((targets - output) ** 2)
             accuracy = self.compute_accuracy(output, targets)
             t1 = time.time()
-
             self.loss_history.append(loss)
             self.accuracy_history.append(accuracy)
             self.training_time.append(t1 - t0)
@@ -70,7 +72,7 @@ class NeuralNetwork:
             if epoch % 100 == 0:
                 print(f"Epoch {epoch}: Loss = {loss:.4f}, Accuracy = {accuracy:.4f}")
 
-# GUI layer
+# === GUI Layer ===
 class InteractiveNNGUI:
     def __init__(self):
         self.X = np.array([[0, 0], [0, 1], [1, 0], [1, 1]])
@@ -81,86 +83,103 @@ class InteractiveNNGUI:
         self.learning_rate = 0.1
         self.epochs = 1000
         self.nn = NeuralNetwork(self.input_size, self.hidden_sizes, self.output_size)
-        self.build_gui()
+        self.setup_gui()
 
-    def build_gui(self):
+    def setup_gui(self):
         plt.ion()
         self.fig = plt.figure(figsize=(11, 9))
-        gs = gridspec.GridSpec(4, 2, height_ratios=[4, 0.5, 0.5, 1])
+        gs = gridspec.GridSpec(5, 2, height_ratios=[4, 0.5, 0.5, 0.5, 1])
 
+        # Create plots
         self.ax_loss = self.fig.add_subplot(gs[0, 0])
         self.ax_boundary = self.fig.add_subplot(gs[0, 1])
-        self.ax_lr_slider = self.fig.add_subplot(gs[1, :])
-        self.ax_epoch_slider = self.fig.add_subplot(gs[2, :])
-        self.ax_time_complexity = self.fig.add_subplot(gs[3, :])
-        self.ax_button = plt.axes([0.45, 0.01, 0.1, 0.05], facecolor='#d4af37')
+        self.ax_time = self.fig.add_subplot(gs[1, :])
+        
+        # Setup sliders
+        self.slider_lr = Slider(self.fig.add_subplot(gs[2, :]), 'Learning Rate', 0.01, 1.0,
+                                valinit=self.learning_rate, valstep=0.01)
+        self.slider_epochs = Slider(self.fig.add_subplot(gs[3, :]), 'Epochs', 100, 10000,
+                                    valinit=self.epochs, valstep=100)
+        
+        # Setup button and textbox
+        self.button = Button(self.fig.add_axes([0.45, 0.01, 0.1, 0.05]), 'Train', 
+                           color='#f5deb3', hovercolor='#c4a000')
+        self.textbox = TextBox(self.fig.add_axes([0.82, 0.01, 0.15, 0.05]), 
+                             'Hidden Layers', initial="4")
 
-        self.button = Button(self.ax_button, 'Train', color='#f5deb3', hovercolor='#c4a000')
-        self.button.label.set_fontsize(10)
-        self.button.label.set_color('#2b2b2b')
+        # Connect events
+        self.slider_lr.on_changed(self.update_learning_rate)
+        self.slider_epochs.on_changed(self.update_epochs)
+        self.button.on_clicked(self.start_training)
+        self.textbox.on_submit(self.update_hidden_layers)
 
-        self.slider_lr = Slider(self.ax_lr_slider, 'Learning Rate', 0.01, 1.0, valinit=self.learning_rate, valstep=0.01)
-        self.slider_epochs = Slider(self.ax_epoch_slider, 'Epochs', 100, 10000, valinit=self.epochs, valstep=100)
+        self.initialize_plots()
+        self.fig.tight_layout(pad=2.0)
 
-        self.slider_lr.on_changed(self.update_params)
-        self.slider_epochs.on_changed(self.update_params)
-        self.button.on_clicked(self.train_and_plot)
-
-        # Set initial titles so they're not empty
+    def initialize_plots(self):
+        for ax in [self.ax_loss, self.ax_boundary, self.ax_time]:
+            ax.clear()
+            ax.grid(True)
+        
         self.ax_loss.set_title("Loss & Accuracy")
         self.ax_boundary.set_title("Decision Boundary")
-        self.ax_time_complexity.set_title("Training Time Complexity")
+        self.ax_time.set_title("Training Time")
 
-    def update_params(self, val):
-        self.learning_rate = self.slider_lr.val
-        self.epochs = int(self.slider_epochs.val)
+    def update_learning_rate(self, val):
+        self.learning_rate = val
 
-    def train_and_plot(self, event):
-        self.nn.reset()
-        self.nn.train(self.X, self.Y, self.epochs, self.learning_rate)
-        self.plot_loss_accuracy()
-        self.plot_decision_boundary()
-        self.plot_time_complexity()
-        self.fig.canvas.draw_idle()
-        time.sleep(0.05)  
+    def update_epochs(self, val):
+        self.epochs = int(val)
 
-    def plot_loss_accuracy(self):
-        self.ax_loss.cla()
+    def update_hidden_layers(self, text):
+        try:
+            self.hidden_sizes = list(map(int, text.strip().split(",")))
+            self.nn.set_hidden_layers(self.hidden_sizes)
+        except ValueError:
+            print("Please enter comma-separated integers (e.g. '4,3')")
+
+    def start_training(self, event):
+        self.button.disabled = True  # Disable during training
+        self.button.label.set_text("Training...")
+        plt.pause(0.1)  # Allow GUI to update
+        
+        try:
+            self.nn.train(self.X, self.Y, self.epochs, self.learning_rate)
+            self.update_plots()
+        finally:
+            self.button.disabled = False
+            self.button.label.set_text("Train")
+            plt.pause(0.1)  # Ensure button state updates
+
+    def update_plots(self):
+        # Loss and Accuracy
+        self.ax_loss.clear()
         self.ax_loss.plot(self.nn.loss_history, label='Loss')
         self.ax_loss.plot(self.nn.accuracy_history, label='Accuracy')
-        self.ax_loss.set_title("Loss & Accuracy")
-        self.ax_loss.set_xlabel("Epoch")
-        self.ax_loss.set_ylabel("Value")
-        self.ax_loss.grid(True)
         self.ax_loss.legend()
+        
+        # Decision Boundary
+        self.plot_decision_boundary()
+        
+        # Time Complexity
+        self.ax_time.clear()
+        self.ax_time.plot(np.cumsum(self.nn.training_time))
+        
+        plt.draw()
 
     def plot_decision_boundary(self):
-        self.ax_boundary.cla()
-        x_min, x_max = self.X[:, 0].min() - 0.5, self.X[:, 0].max() + 0.5
-        y_min, y_max = self.X[:, 1].min() - 0.5, self.X[:, 1].max() + 0.5
-        xx, yy = np.meshgrid(np.linspace(x_min, x_max, 300), np.linspace(y_min, y_max, 300))
-        input_grid = np.c_[xx.ravel(), yy.ravel()]
-        predictions = self.nn.predict(input_grid)
-        Z = predictions.reshape(xx.shape)
-
+        self.ax_boundary.clear()
+        x_min, x_max = -0.5, 1.5
+        y_min, y_max = -0.5, 1.5
+        xx, yy = np.meshgrid(np.linspace(x_min, x_max, 100), 
+                           np.linspace(y_min, y_max, 100))
+        Z = self.nn.predict(np.c_[xx.ravel(), yy.ravel()]).reshape(xx.shape)
+        
         self.ax_boundary.contourf(xx, yy, Z, levels=50, cmap="RdBu", alpha=0.8)
-        self.ax_boundary.scatter(self.X[:, 0], self.X[:, 1], c=self.Y.ravel(), edgecolors='k', cmap="RdBu", s=100)
-        self.ax_boundary.set_title("Decision Boundary")
-        self.ax_boundary.set_xlabel("Input 1")
-        self.ax_boundary.set_ylabel("Input 2")
-        self.ax_boundary.grid(True)
+        self.ax_boundary.scatter(self.X[:, 0], self.X[:, 1], c=self.Y.ravel(), 
+                               cmap="RdBu", edgecolors='k', s=100)
 
-    def plot_time_complexity(self):
-        self.ax_time_complexity.cla()
-        total_time = np.cumsum(self.nn.training_time)
-        self.ax_time_complexity.plot(total_time, label='Cumulative Time')
-        self.ax_time_complexity.set_title("Training Time Complexity")
-        self.ax_time_complexity.set_xlabel("Epoch")
-        self.ax_time_complexity.set_ylabel("Time (s)")
-        self.ax_time_complexity.grid(True)
-        self.ax_time_complexity.legend()
-
-# Entry Point
+# === Entry Point ===
 def main():
     InteractiveNNGUI()
     plt.show(block=True)
